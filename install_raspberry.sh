@@ -41,8 +41,8 @@ echo "Installing Python and development tools..."
 sudo apt install -y python3-pip python3-dev python3-venv
 
 echo "Installing OpenCV and computer vision libraries..."
-sudo apt install -y libopencv-dev python3-opencv libatlas-base-dev \
-    libjasper-dev libqtgui4 libqt4-test libhdf5-dev libhdf5-serial-dev
+sudo apt install -y libopencv-dev python3-opencv \
+    libhdf5-dev libopenblas-dev liblapack-dev gfortran
 
 echo "Installing I2C tools..."
 sudo apt install -y i2c-tools
