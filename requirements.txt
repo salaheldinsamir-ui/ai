@@ -1,0 +1,30 @@
+# Python Dependencies for Attendance System
+# Install with: pip install -r requirements.txt
+
+# Computer Vision
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+
+# Face Recognition (DeepFace)
+deepface>=0.0.79
+tf-keras>=2.16.0
+tensorflow>=2.16.0
+
+# Alternative lightweight models (optional)
+# face-recognition>=1.3.0
+
+# Database
+# SQLite is built into Python
+
+# Utilities
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# Raspberry Pi specific (install only on Raspberry Pi)
+# picamera2  # For Pi Camera
+# RPi.GPIO   # For GPIO control
+# RPLCD      # For LCD display
+
+# Development tools (optional)
+# pytest>=7.4.0
+# black>=23.0.0
