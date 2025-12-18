@@ -39,14 +39,22 @@ class LCDDisplay:
                 port=1,
                 cols=self.cols,
                 rows=self.rows,
-                backlight_enabled=True  # Ensure backlight is on
+                backlight_enabled=True,
+                charmap='A00'  # Standard character map for most LCDs
             )
             
+            # Initialize LCD properly
+            time.sleep(0.5)  # Wait for LCD to initialize
             self.lcd.clear()
-            time.sleep(0.1)  # Small delay after clear
+            time.sleep(0.2)  # Wait after clear
+            
             # Test write to LCD
             self.lcd.cursor_pos = (0, 0)
             self.lcd.write_string("LCD Ready!")
+            time.sleep(1)
+            self.lcd.clear()
+            time.sleep(0.1)
+            
             print(f"[LCD] Raspberry Pi LCD initialized (Address: {hex(self.i2c_address)})")
             
         except ImportError as e:
@@ -59,6 +67,18 @@ class LCDDisplay:
             self.mode = "PC"
             self.lcd = None
             
+    def _sanitize_text(self, text):
+        """Remove or replace special characters that LCD can't display"""
+        # Only allow basic ASCII characters that LCD can display
+        allowed = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .:!?-_()[]'
+        result = ''
+        for char in str(text):
+            if char in allowed:
+                result += char
+            else:
+                result += ' '  # Replace unknown chars with space
+        return result
+    
     def display_message(self, line1, line2=""):
         """
         Display message on LCD
@@ -67,6 +87,10 @@ class LCDDisplay:
             line1: First line text
             line2: Second line text (optional)
         """
+        # Sanitize text for LCD
+        line1 = self._sanitize_text(line1)
+        line2 = self._sanitize_text(line2)
+        
         # Always print to terminal for debugging
         print(f"[LCD Display] Line1: {line1} | Line2: {line2}")
         
@@ -81,13 +105,15 @@ class LCDDisplay:
         elif self.mode == "RASPBERRY_PI" and self.lcd:
             try:
                 self.lcd.clear()
-                time.sleep(0.05)  # Small delay after clear
+                time.sleep(0.1)  # Wait after clear
                 self.lcd.cursor_pos = (0, 0)
                 self.lcd.write_string(line1[:self.cols])
                 
                 if line2:
                     self.lcd.cursor_pos = (1, 0)
                     self.lcd.write_string(line2[:self.cols])
+                
+                time.sleep(0.05)  # Small delay after write
                     
             except Exception as e:
                 print(f"[LCD] Error displaying message: {e}")
