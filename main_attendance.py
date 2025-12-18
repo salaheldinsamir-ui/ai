@@ -181,8 +181,13 @@ class AttendanceSystem:
         # Start in standby if ultrasonic is enabled, otherwise start active
         if ULTRASONIC_ENABLED:
             current_state = STATE_STANDBY
-            self.lcd.display_message("System", "Standby Mode")
-            print("[System] Starting in STANDBY mode - waiting for presence")
+            self.lcd.display_message("Standby", "Mode")
+            time.sleep(1)
+            # Turn off LCD and camera to save power on startup
+            self.camera.stop()
+            self.lcd.backlight_off()
+            print("[System] Starting in STANDBY mode - LCD and camera OFF")
+            print("[System] Waiting for presence within 45cm...")
         else:
             current_state = STATE_WAITING
             self.lcd.display_message("Ready", "Show your face")
@@ -202,9 +207,18 @@ class AttendanceSystem:
                     # Check for presence
                     if self.check_presence(max_distance=45):
                         print("\n[System] Presence detected! Waking up...")
-                        self.lcd.display_message("Welcome!", "Initializing...")
+                        
+                        # Turn on LCD and camera
+                        self.lcd.backlight_on()
+                        self.lcd.display_message("Welcome!", "Starting...")
+                        self.camera.start()
                         self.buzzer.beep(0.1)
-                        time.sleep(0.5)
+                        
+                        # Warmup camera
+                        print("[System] Warming up camera...")
+                        for i in range(5):
+                            self.camera.read_frame()
+                            time.sleep(0.1)
                         
                         current_state = STATE_WAITING
                         last_presence_time = current_time
@@ -224,7 +238,14 @@ class AttendanceSystem:
                         no_presence_duration = current_time - last_presence_time
                         if no_presence_duration >= no_presence_timeout:
                             print(f"\n[System] No presence for {no_presence_timeout}s - going to STANDBY")
-                            self.lcd.display_message("System", "Standby Mode")
+                            self.lcd.display_message("Standby", "Mode")
+                            time.sleep(1)
+                            
+                            # Turn off LCD and camera to save power
+                            self.camera.stop()
+                            self.lcd.backlight_off()
+                            print("[System] Camera and LCD turned OFF")
+                            
                             current_state = STATE_STANDBY
                             recognized_student = None
                             continue

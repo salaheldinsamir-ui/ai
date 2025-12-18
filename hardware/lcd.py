@@ -151,12 +151,36 @@ class LCDDisplay:
         
         message = error_messages.get(error_type, ("Error", "Unknown"))
         self.display_message(message[0], message[1])
+    
+    def backlight_on(self):
+        """Turn on LCD backlight"""
+        if self.mode == "RASPBERRY_PI" and self.lcd:
+            try:
+                self.lcd.backlight_enabled = True
+                print("[LCD] Backlight ON")
+            except Exception as e:
+                print(f"[LCD] Error turning backlight on: {e}")
+        else:
+            print("[LCD] Backlight ON (simulated)")
+    
+    def backlight_off(self):
+        """Turn off LCD backlight"""
+        if self.mode == "RASPBERRY_PI" and self.lcd:
+            try:
+                self.lcd.clear()
+                self.lcd.backlight_enabled = False
+                print("[LCD] Backlight OFF")
+            except Exception as e:
+                print(f"[LCD] Error turning backlight off: {e}")
+        else:
+            print("[LCD] Backlight OFF (simulated)")
         
     def cleanup(self):
         """Clean up LCD resources"""
         if self.mode == "RASPBERRY_PI" and self.lcd:
             try:
                 self.lcd.clear()
+                self.lcd.backlight_enabled = False
                 self.lcd.close()
                 print("[LCD] LCD cleaned up")
             except:

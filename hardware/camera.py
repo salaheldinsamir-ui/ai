@@ -22,6 +22,7 @@ class Camera:
         self.width = width
         self.height = height
         self.camera = None
+        self.is_running = False
         
         if mode == "PC":
             self._init_pc_camera(camera_index)
@@ -38,7 +39,8 @@ class Camera:
         
         if not self.camera.isOpened():
             raise RuntimeError("Failed to open PC camera")
-            
+        
+        self.is_running = True
         print(f"[Camera] PC webcam initialized: {self.width}x{self.height}")
         
     def _init_pi_camera(self):
@@ -57,6 +59,7 @@ class Camera:
             # Give camera time to warm up
             time.sleep(2)
             
+            self.is_running = True
             print(f"[Camera] Raspberry Pi camera initialized: {self.width}x{self.height}")
             
         except ImportError:
@@ -73,6 +76,9 @@ class Camera:
         Returns:
             Numpy array (BGR format) or None if failed
         """
+        if not self.is_running:
+            return None
+            
         if self.mode == "PC":
             ret, frame = self.camera.read()
             if ret:
@@ -89,6 +95,39 @@ class Camera:
             except Exception as e:
                 print(f"[Camera] Error reading Pi camera: {e}")
                 return None
+    
+    def stop(self):
+        """Stop camera (for standby mode)"""
+        if not self.is_running:
+            return
+            
+        if self.mode == "RASPBERRY_PI" and self.camera:
+            try:
+                self.camera.stop()
+                self.is_running = False
+                print("[Camera] Camera stopped (standby)")
+            except Exception as e:
+                print(f"[Camera] Error stopping: {e}")
+        else:
+            self.is_running = False
+            print("[Camera] Camera stopped (simulated)")
+    
+    def start(self):
+        """Start camera (wake from standby)"""
+        if self.is_running:
+            return
+            
+        if self.mode == "RASPBERRY_PI" and self.camera:
+            try:
+                self.camera.start()
+                time.sleep(1)  # Brief warmup
+                self.is_running = True
+                print("[Camera] Camera started")
+            except Exception as e:
+                print(f"[Camera] Error starting: {e}")
+        else:
+            self.is_running = True
+            print("[Camera] Camera started (simulated)")
                 
     def release(self):
         """Release camera resources"""
@@ -103,7 +142,8 @@ class Camera:
                     self.camera.close()
                 except Exception as e:
                     print(f"[Camera] Error releasing: {e}")
-                    
+        
+        self.is_running = False
         print("[Camera] Camera released")
         
     def is_opened(self):
