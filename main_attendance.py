@@ -144,39 +144,90 @@ class AttendanceSystem:
         
         return best_frame
     
-    def check_presence(self):
-        """Check if someone is present (using ultrasonic or assume present if disabled)"""
+    def check_presence(self, max_distance=45):
+        """
+        Check if someone is present within range using ultrasonic sensors
+        
+        Args:
+            max_distance: Maximum detection distance in cm (default 45cm)
+            
+        Returns:
+            True if presence detected, False otherwise
+        """
         if not ULTRASONIC_ENABLED:
             return True
         
-        presence1 = self.ultrasonic1.check_presence(30, 100)
-        presence2 = self.ultrasonic2.check_presence(30, 100)
-        return presence1 and presence2
+        # Check both sensors - either one detecting is enough
+        presence1 = self.ultrasonic1.check_presence(10, max_distance)
+        presence2 = self.ultrasonic2.check_presence(10, max_distance)
+        return presence1 or presence2
     
     def run(self):
-        """Main attendance checking loop - simplified robust version"""
+        """Main attendance checking loop - with ultrasonic presence detection"""
         print("\n" + "="*50)
         print("ATTENDANCE SYSTEM ACTIVE")
         print("Press Ctrl+C to quit")
         print("="*50 + "\n")
         
-        self.lcd.display_message("Ready", "Show your face")
-        
         # State machine
-        STATE_WAITING = 0
+        STATE_STANDBY = -1      # System sleeping, waiting for presence
+        STATE_WAITING = 0       # Active, waiting for face
         STATE_DETECTING_FACE = 1
         STATE_WAITING_ARUCO = 2
         STATE_DETECTING_ARUCO = 3
         STATE_SUCCESS = 4
         STATE_ERROR = 5
         
-        current_state = STATE_WAITING
+        # Start in standby if ultrasonic is enabled, otherwise start active
+        if ULTRASONIC_ENABLED:
+            current_state = STATE_STANDBY
+            self.lcd.display_message("System", "Standby Mode")
+            print("[System] Starting in STANDBY mode - waiting for presence")
+        else:
+            current_state = STATE_WAITING
+            self.lcd.display_message("Ready", "Show your face")
+            print("[System] Ultrasonic disabled - system always active")
+        
         recognized_student = None
         state_start_time = time.time()
+        last_presence_time = time.time()  # Track when presence was last detected
+        no_presence_timeout = 10.0  # Seconds of no presence before going to standby
         
         try:
             while True:
                 current_time = time.time()
+                
+                # ===== STATE: STANDBY (waiting for presence) =====
+                if current_state == STATE_STANDBY:
+                    # Check for presence
+                    if self.check_presence(max_distance=45):
+                        print("\n[System] Presence detected! Waking up...")
+                        self.lcd.display_message("Welcome!", "Initializing...")
+                        self.buzzer.beep(0.1)
+                        time.sleep(0.5)
+                        
+                        current_state = STATE_WAITING
+                        last_presence_time = current_time
+                        state_start_time = current_time
+                        self.lcd.display_message("Ready", "Show your face")
+                    else:
+                        # Still in standby - minimal processing
+                        time.sleep(0.5)  # Check presence every 0.5 seconds
+                    continue
+                
+                # For all active states, check presence timeout
+                if ULTRASONIC_ENABLED:
+                    if self.check_presence(max_distance=45):
+                        last_presence_time = current_time
+                    else:
+                        # No presence - check timeout
+                        no_presence_duration = current_time - last_presence_time
+                        if no_presence_duration >= no_presence_timeout:
+                            print(f"\n[System] No presence for {no_presence_timeout}s - going to STANDBY")
+                            self.lcd.display_message("System", "Standby Mode")
+                            current_state = STATE_STANDBY
+                            recognized_student = None
+                            continue
                 
                 # ===== STATE: WAITING FOR FACE =====
                 if current_state == STATE_WAITING:
@@ -187,20 +238,6 @@ class AttendanceSystem:
                     if frame is None:
                         print("[Error] Failed to capture frame")
                         time.sleep(0.5)
-                        continue
-                    
-                    # Check for presence
-                    if not self.check_presence():
-                        if HARDWARE_MODE == "PC":
-                            cv2.putText(frame, "Waiting for person...", (10, 30),
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                            cv2.imshow("Attendance System", frame)
-                            key = cv2.waitKey(100) & 0xFF
-                            if key == ord('q'):
-                                break
-                            elif key == ord('s'):
-                                self.show_statistics()
-                        time.sleep(0.1)
                         continue
                     
                     # Try to detect face
