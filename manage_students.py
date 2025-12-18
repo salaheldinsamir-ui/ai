@@ -18,8 +18,8 @@ def list_students(db):
     print("ENROLLED STUDENTS")
     print("="*60)
     for student in students:
-        student_id, name, aruco_id, encoding, enrolled_date = student
-        print(f"  ID: {student_id} | Name: {name:20s} | ArUco: {aruco_id} | Date: {enrolled_date}")
+        student_id, name, aruco_id, encoding = student
+        print(f"  ID: {student_id} | Name: {name:20s} | ArUco: {aruco_id}")
     print("="*60)
     
     return students
