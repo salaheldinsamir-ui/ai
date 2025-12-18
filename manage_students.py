@@ -1,8 +1,10 @@
 """
 Student Management Script
 Delete and enroll students in the attendance system
+With attendance reset feature
 """
 import sys
+from datetime import datetime
 from database.db_manager import DatabaseManager
 from config import DATABASE_PATH
 
@@ -112,6 +114,135 @@ def enroll_students():
     else:
         print("\n✗ Enrollment failed")
 
+def reset_student_attendance(db):
+    """Reset attendance for a specific student (allows them to take attendance again today)"""
+    students = list_students(db)
+    
+    if not students:
+        return
+    
+    print("\nEnter student ID to reset today's attendance (or 'cancel'): ", end='')
+    choice = input().strip()
+    
+    if choice.lower() == 'cancel':
+        print("Cancelled")
+        return
+    
+    try:
+        student_id = int(choice)
+        
+        # Find student
+        student = None
+        for s in students:
+            if s[0] == student_id:
+                student = s
+                break
+        
+        if not student:
+            print(f"\n✗ Student ID {student_id} not found")
+            return
+        
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        # Check if they have attendance today
+        import sqlite3
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, timestamp FROM attendance WHERE student_id = ? AND date(timestamp) = ?",
+            (student_id, today)
+        )
+        records = cursor.fetchall()
+        
+        if not records:
+            print(f"\n✗ {student[1]} has no attendance record for today")
+            conn.close()
+            return
+        
+        print(f"\n⚠️  Reset attendance for {student[1]} today? They can take attendance again. (yes/no): ", end='')
+        confirm = input().strip().lower()
+        
+        if confirm == 'yes':
+            cursor.execute(
+                "DELETE FROM attendance WHERE student_id = ? AND date(timestamp) = ?",
+                (student_id, today)
+            )
+            conn.commit()
+            print(f"\n✓ Attendance reset for {student[1]} - they can take attendance again today")
+        else:
+            print("Cancelled")
+        
+        conn.close()
+            
+    except ValueError:
+        print("\n✗ Invalid student ID")
+    except Exception as e:
+        print(f"\n✗ Error resetting attendance: {e}")
+
+def reset_all_attendance_today(db):
+    """Reset all attendance for today"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    import sqlite3
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COUNT(*) FROM attendance WHERE date(timestamp) = ?",
+        (today,)
+    )
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        print(f"\n✗ No attendance records for today ({today})")
+        conn.close()
+        return
+    
+    print(f"\n⚠️  Reset ALL {count} attendance records for today ({today})? (type 'RESET ALL' to confirm): ", end='')
+    confirm = input().strip()
+    
+    if confirm == 'RESET ALL':
+        cursor.execute(
+            "DELETE FROM attendance WHERE date(timestamp) = ?",
+            (today,)
+        )
+        conn.commit()
+        print(f"\n✓ All attendance for today has been reset - all students can take attendance again")
+    else:
+        print("Cancelled")
+    
+    conn.close()
+
+def view_today_attendance(db):
+    """View today's attendance"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    import sqlite3
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT s.id, s.name, a.timestamp, a.status 
+        FROM attendance a 
+        JOIN students s ON a.student_id = s.id 
+        WHERE date(a.timestamp) = ?
+        ORDER BY a.timestamp DESC
+    """, (today,))
+    records = cursor.fetchall()
+    conn.close()
+    
+    print("\n" + "="*60)
+    print(f"TODAY'S ATTENDANCE ({today})")
+    print("="*60)
+    
+    if not records:
+        print("  No attendance recorded today")
+    else:
+        for student_id, name, timestamp, status in records:
+            time_str = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
+            print(f"  ID: {student_id} | {name:20s} | Time: {time_str} | {status}")
+    
+    print("="*60)
+    print(f"Total: {len(records)} students present today")
+
 def main():
     """Main menu"""
     print("="*60)
@@ -126,7 +257,10 @@ def main():
         print("  2. Delete a student")
         print("  3. Delete ALL students")
         print("  4. Enroll new students")
-        print("  5. Exit")
+        print("  5. View today's attendance")
+        print("  6. Reset student attendance (allow re-take)")
+        print("  7. Reset ALL attendance today")
+        print("  8. Exit")
         print("\nChoice: ", end='')
         
         choice = input().strip()
@@ -144,6 +278,15 @@ def main():
             enroll_students()
             
         elif choice == '5':
+            view_today_attendance(db)
+            
+        elif choice == '6':
+            reset_student_attendance(db)
+            
+        elif choice == '7':
+            reset_all_attendance_today(db)
+            
+        elif choice == '8':
             print("\nExiting...")
             break
             
