@@ -17,6 +17,8 @@ from ai.face_detector import FaceDetector
 from ai.face_recognition import FaceRecognizer
 from ai.aruco_detector import ArucoDetector
 from hardware.camera import Camera
+from hardware.lcd import LCD
+from hardware.buzzer import Buzzer
 
 
 class EnrollmentSystem:
@@ -31,6 +33,9 @@ class EnrollmentSystem:
         print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*50)
         
+        # Initialize hardware based on mode
+        self.use_lcd = (HARDWARE_MODE == "RASPBERRY_PI")
+        
         # Initialize camera
         print("\n[Init] Initializing camera...")
         self.camera = Camera(
@@ -39,6 +44,16 @@ class EnrollmentSystem:
             width=CAMERA_WIDTH,
             height=CAMERA_HEIGHT
         )
+        
+        # Initialize LCD and Buzzer for Raspberry Pi
+        if self.use_lcd:
+            print("[Init] Initializing LCD...")
+            self.lcd = LCD(mode=HARDWARE_MODE, i2c_address=LCD_I2C_ADDRESS)
+            print("[Init] Initializing Buzzer...")
+            self.buzzer = Buzzer(mode=HARDWARE_MODE, pin=BUZZER_PIN)
+        else:
+            self.lcd = None
+            self.buzzer = None
         
         # Initialize AI modules
         print("[Init] Initializing AI modules...")
@@ -64,10 +79,17 @@ class EnrollmentSystem:
         """
         print(f"\n[Capture] Capturing face for: {student_name}")
         print("[Capture] Position your face in front of the camera...")
-        print("[Capture] Press SPACE to capture, ESC to cancel")
+        if not self.use_lcd:
+            print("[Capture] Press SPACE to capture, ESC to cancel")
+        
+        # LCD instructions for Raspberry Pi
+        if self.lcd:
+            self.lcd.display_message("Enrollment", "Place face now")
         
         captured = False
         face_embedding = None
+        frame_count = 0
+        auto_capture_frames = 30  # Auto-capture after 30 frames (~1 second)
         
         while not captured:
             frame = self.camera.read_frame()
@@ -85,42 +107,78 @@ class EnrollmentSystem:
             if len(faces) == 0:
                 status = "No face detected"
                 color = (0, 0, 255)
+                if self.lcd:
+                    self.lcd.display_message("Enrollment", "No face found")
+                frame_count = 0
             elif len(faces) == 1:
-                status = "Ready! Press SPACE to capture"
+                status = "Ready! Press SPACE to capture" if not self.use_lcd else "Hold still..."
                 color = (0, 255, 0)
+                frame_count += 1
+                if self.lcd:
+                    self.lcd.display_message("Hold still...", f"Detecting {frame_count}/{auto_capture_frames}")
             else:
                 status = "Multiple faces! Only one person"
                 color = (0, 0, 255)
-                
-            cv2.putText(display_frame, status, (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-            cv2.putText(display_frame, f"Enrolling: {student_name}", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                if self.lcd:
+                    self.lcd.display_message("Error", "One person only!")
+                frame_count = 0
             
-            cv2.imshow("Enrollment - Face Capture", display_frame)
+            # Only show window on PC mode
+            if not self.use_lcd:
+                cv2.putText(display_frame, status, (10, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                cv2.putText(display_frame, f"Enrolling: {student_name}", (10, 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                cv2.imshow("Enrollment - Face Capture", display_frame)
             
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(1) & 0xFF if not self.use_lcd else -1
             
-            if key == ord(' ') and len(faces) == 1:
+            # Auto-capture on Pi after stable detection, manual on PC
+            should_capture = False
+            if self.use_lcd:
+                should_capture = (len(faces) == 1 and frame_count >= auto_capture_frames)
+            else:
+                should_capture = (key == ord(' ') and len(faces) == 1)
+            
+            if should_capture:
                 # Capture face
                 face_roi, face_bbox = self.face_detector.get_single_face(frame)
                 
                 if face_roi is not None:
                     # Quality check removed - proceed directly to embedding generation
                     print("[Capture] Face captured! Generating embedding...")
+                    if self.lcd:
+                        self.lcd.display_message("Processing...", "Analyzing face")
                     
                     # Generate embedding
                     face_embedding = self.face_recognizer.generate_embedding(face_roi)
                     
                     if face_embedding is not None:
                         print("[Capture] ✓ Face embedding generated successfully!")
+                        if self.lcd:
+                            self.lcd.display_message("Success!", "Face captured")
+                        if self.buzzer:
+                            self.buzzer.success()
+                        time.sleep(2)
                         captured = True
                     else:
                         print("[Capture] ✗ Failed to generate embedding. Try again.")
+                        if self.lcd:
+                            self.lcd.display_message("Error", "Try again")
+                        if self.buzzer:
+                            self.buzzer.error()
+                        time.sleep(2)
+                        frame_count = 0
                 else:
                     print("[Capture] ✗ Failed to extract face. Try again.")
+                    if self.lcd:
+                        self.lcd.display_message("Error", "Face unclear")
+                    if self.buzzer:
+                        self.buzzer.error()
+                    time.sleep(2)
+                    frame_count = 0
                     
-            elif key == 27:  # ESC
+            elif key == 27 and not self.use_lcd:  # ESC (PC mode only)
                 print("[Capture] Cancelled by user")
                 return None
                 
@@ -138,10 +196,17 @@ class EnrollmentSystem:
         """
         print(f"\n[Capture] Capturing ArUco marker for: {student_name}")
         print("[Capture] Show the ArUco marker to the camera...")
-        print("[Capture] Press SPACE to capture, ESC to cancel")
+        if not self.use_lcd:
+            print("[Capture] Press SPACE to capture, ESC to cancel")
+        
+        # LCD instructions for Raspberry Pi
+        if self.lcd:
+            self.lcd.display_message("ArUco Marker", "Show marker now")
         
         captured = False
         aruco_id = None
+        frame_count = 0
+        auto_capture_frames = 20  # Auto-capture after 20 frames
         
         while not captured:
             frame = self.camera.read_frame()
@@ -159,29 +224,51 @@ class EnrollmentSystem:
             if len(marker_ids) == 0:
                 status = "No ArUco marker detected"
                 color = (0, 0, 255)
+                if self.lcd:
+                    self.lcd.display_message("ArUco Marker", "No marker found")
+                frame_count = 0
             elif len(marker_ids) == 1:
-                status = f"Marker ID: {marker_ids[0]} - Press SPACE"
+                status = f"Marker ID: {marker_ids[0]} - Press SPACE" if not self.use_lcd else f"Marker: {marker_ids[0]}"
                 color = (0, 255, 0)
+                frame_count += 1
+                if self.lcd:
+                    self.lcd.display_message(f"Marker: {marker_ids[0]}", f"Hold {frame_count}/{auto_capture_frames}")
             else:
                 status = "Multiple markers! Show only one"
                 color = (0, 0, 255)
-                
-            cv2.putText(display_frame, status, (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-            cv2.putText(display_frame, f"Enrolling: {student_name}", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                if self.lcd:
+                    self.lcd.display_message("Error", "One marker only!")
+                frame_count = 0
             
-            cv2.imshow("Enrollment - ArUco Capture", display_frame)
+            # Only show window on PC mode
+            if not self.use_lcd:
+                cv2.putText(display_frame, status, (10, 30),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                cv2.putText(display_frame, f"Enrolling: {student_name}", (10, 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                cv2.imshow("Enrollment - ArUco Capture", display_frame)
             
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(1) & 0xFF if not self.use_lcd else -1
             
-            if key == ord(' ') and len(marker_ids) == 1:
+            # Auto-capture on Pi, manual on PC
+            should_capture = False
+            if self.use_lcd:
+                should_capture = (len(marker_ids) == 1 and frame_count >= auto_capture_frames)
+            else:
+                should_capture = (key == ord(' ') and len(marker_ids) == 1)
+            
+            if should_capture:
                 # Capture ArUco ID
                 aruco_id = marker_ids[0]
                 print(f"[Capture] ✓ ArUco marker captured: ID {aruco_id}")
+                if self.lcd:
+                    self.lcd.display_message("Success!", f"Marker: {aruco_id}")
+                if self.buzzer:
+                    self.buzzer.success()
+                time.sleep(2)
                 captured = True
                 
-            elif key == 27:  # ESC
+            elif key == 27 and not self.use_lcd:  # ESC (PC mode only)
                 print("[Capture] Cancelled by user")
                 return None
                 
@@ -202,13 +289,28 @@ class EnrollmentSystem:
         print(f"\n[Enroll] Enrolling student: {name}")
         print(f"[Enroll] ArUco ID: {aruco_id}")
         
+        if self.lcd:
+            self.lcd.display_message("Saving...", "Please wait")
+        
         student_id = self.db.add_student(name, aruco_id, face_embedding)
         
         if student_id:
             print(f"[Enroll] ✓ Student enrolled successfully! ID: {student_id}")
+            if self.lcd:
+                self.lcd.display_message("Enrolled!", f"{name}")
+            if self.buzzer:
+                self.buzzer.success()
+                time.sleep(0.2)
+                self.buzzer.success()
+            time.sleep(3)
             return student_id
         else:
             print("[Enroll] ✗ Failed to enroll student (ArUco ID may already exist)")
+            if self.lcd:
+                self.lcd.display_message("Error", "ID exists")
+            if self.buzzer:
+                self.buzzer.error()
+            time.sleep(3)
             return None
             
     def run_enrollment(self):
@@ -292,7 +394,10 @@ class EnrollmentSystem:
         """Clean up resources"""
         print("\n[Cleanup] Releasing resources...")
         self.camera.release()
-        cv2.destroyAllWindows()
+        if not self.use_lcd:
+            cv2.destroyAllWindows()
+        if self.lcd:
+            self.lcd.clear()
         print("[Cleanup] Cleanup complete")
 
 
