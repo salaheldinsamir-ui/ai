@@ -1274,6 +1274,15 @@ def api_enroll():
     enrollment_state['step'] = 'starting'
     
     try:
+        # Stop attendance service to free the camera (Raspberry Pi only)
+        if HARDWARE_MODE == "RASPBERRY_PI":
+            try:
+                subprocess.run(['sudo', 'systemctl', 'stop', 'attendance.service'], 
+                             check=False, timeout=10)
+                time.sleep(2)  # Wait for service to fully stop
+            except:
+                pass  # Service might not be running
+        
         # Import enrollment modules
         from ai.face_detector import FaceDetector
         from ai.face_recognition import FaceRecognizer
@@ -1318,6 +1327,12 @@ def api_enroll():
         if face_embedding is None:
             camera.release()
             enrollment_state['active'] = False
+            # Restart attendance service
+            if HARDWARE_MODE == "RASPBERRY_PI":
+                try:
+                    subprocess.run(['sudo', 'systemctl', 'start', 'attendance.service'], check=False)
+                except:
+                    pass
             return jsonify({'success': False, 'error': 'Could not capture face. Please try again.'})
         
         # Step 2: Verify ArUco marker
@@ -1340,6 +1355,12 @@ def api_enroll():
         
         if detected_aruco is None:
             enrollment_state['active'] = False
+            # Restart attendance service
+            if HARDWARE_MODE == "RASPBERRY_PI":
+                try:
+                    subprocess.run(['sudo', 'systemctl', 'start', 'attendance.service'], check=False)
+                except:
+                    pass
             return jsonify({'success': False, 'error': f'ArUco marker #{aruco_id} not detected. Show the marker to camera.'})
         
         # Step 3: Save to database
@@ -1349,6 +1370,13 @@ def api_enroll():
         enrollment_state['active'] = False
         enrollment_state['step'] = 'complete'
         
+        # Restart attendance service after enrollment
+        if HARDWARE_MODE == "RASPBERRY_PI":
+            try:
+                subprocess.run(['sudo', 'systemctl', 'start', 'attendance.service'], check=False)
+            except:
+                pass
+        
         if student_id:
             return jsonify({'success': True, 'student_id': student_id})
         else:
@@ -1356,6 +1384,12 @@ def api_enroll():
             
     except Exception as e:
         enrollment_state['active'] = False
+        # Restart attendance service on error
+        if HARDWARE_MODE == "RASPBERRY_PI":
+            try:
+                subprocess.run(['sudo', 'systemctl', 'start', 'attendance.service'], check=False)
+            except:
+                pass
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/enroll/status')
@@ -1619,11 +1653,11 @@ if __name__ == '__main__':
     print()
     print("  🌐 Access the Web UI from any device:")
     print()
-    print(f"     http://{local_ip}:5000")
+    print(f"     http://{local_ip}:4000")
     print()
     print("  📱 If using WiFi Hotspot mode:")
     print()
-    print("     http://192.168.4.1:5000")
+    print("     http://192.168.4.1:4000")
     print()
     print("  📶 To setup WiFi Hotspot on Raspberry Pi:")
     print()
@@ -1634,4 +1668,4 @@ if __name__ == '__main__':
     print("=" * 60)
     
     # Run on all interfaces so it's accessible from other devices
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=4000, debug=False, threaded=True)
