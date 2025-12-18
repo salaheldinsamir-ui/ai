@@ -93,10 +93,13 @@ def delete_all_students(db):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM students")
         cursor.execute("DELETE FROM attendance")
+        # Reset auto-increment counter so next student starts at ID 1
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='students'")
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='attendance'")
         conn.commit()
         conn.close()
         
-        print(f"\n✓ All students deleted")
+        print(f"\n✓ All students deleted (IDs reset to start from 1)")
     else:
         print("Cancelled")
 
