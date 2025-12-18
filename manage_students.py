@@ -57,11 +57,14 @@ def delete_student(db):
         confirm = input().strip().lower()
         
         if confirm == 'yes':
-            # Delete student
-            cursor = db.conn.cursor()
+            # Delete student using proper connection
+            import sqlite3
+            conn = sqlite3.connect(db.db_path)
+            cursor = conn.cursor()
             cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))
             cursor.execute("DELETE FROM attendance WHERE student_id = ?", (student_id,))
-            db.conn.commit()
+            conn.commit()
+            conn.close()
             
             print(f"\n✓ Student {student[1]} deleted successfully")
         else:
@@ -83,10 +86,13 @@ def delete_all_students(db):
     confirm = input().strip()
     
     if confirm == 'DELETE ALL':
-        cursor = db.conn.cursor()
+        import sqlite3
+        conn = sqlite3.connect(db.db_path)
+        cursor = conn.cursor()
         cursor.execute("DELETE FROM students")
         cursor.execute("DELETE FROM attendance")
-        db.conn.commit()
+        conn.commit()
+        conn.close()
         
         print(f"\n✓ All students deleted")
     else:
