@@ -100,8 +100,9 @@ class Camera:
             if self.camera:
                 try:
                     self.camera.stop()
-                except:
-                    pass
+                    self.camera.close()
+                except Exception as e:
+                    print(f"[Camera] Error releasing: {e}")
                     
         print("[Camera] Camera released")
         
