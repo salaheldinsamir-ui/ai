@@ -149,7 +149,7 @@ def reset_student_attendance(db):
         conn = sqlite3.connect(db.db_path)
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, timestamp FROM attendance WHERE student_id = ? AND date(timestamp) = ?",
+            "SELECT id, time FROM attendance WHERE student_id = ? AND date = ?",
             (student_id, today)
         )
         records = cursor.fetchall()
@@ -164,7 +164,7 @@ def reset_student_attendance(db):
         
         if confirm == 'yes':
             cursor.execute(
-                "DELETE FROM attendance WHERE student_id = ? AND date(timestamp) = ?",
+                "DELETE FROM attendance WHERE student_id = ? AND date = ?",
                 (student_id, today)
             )
             conn.commit()
@@ -187,7 +187,7 @@ def reset_all_attendance_today(db):
     conn = sqlite3.connect(db.db_path)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT COUNT(*) FROM attendance WHERE date(timestamp) = ?",
+        "SELECT COUNT(*) FROM attendance WHERE date = ?",
         (today,)
     )
     count = cursor.fetchone()[0]
@@ -202,7 +202,7 @@ def reset_all_attendance_today(db):
     
     if confirm == 'RESET ALL':
         cursor.execute(
-            "DELETE FROM attendance WHERE date(timestamp) = ?",
+            "DELETE FROM attendance WHERE date = ?",
             (today,)
         )
         conn.commit()
@@ -220,11 +220,11 @@ def view_today_attendance(db):
     conn = sqlite3.connect(db.db_path)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT s.id, s.name, a.timestamp, a.status 
+        SELECT s.id, s.name, a.time, a.status 
         FROM attendance a 
         JOIN students s ON a.student_id = s.id 
-        WHERE date(a.timestamp) = ?
-        ORDER BY a.timestamp DESC
+        WHERE a.date = ?
+        ORDER BY a.time DESC
     """, (today,))
     records = cursor.fetchall()
     conn.close()
@@ -236,8 +236,7 @@ def view_today_attendance(db):
     if not records:
         print("  No attendance recorded today")
     else:
-        for student_id, name, timestamp, status in records:
-            time_str = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
+        for student_id, name, time_str, status in records:
             print(f"  ID: {student_id} | {name:20s} | Time: {time_str} | {status}")
     
     print("="*60)
