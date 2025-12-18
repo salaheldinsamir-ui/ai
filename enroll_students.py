@@ -45,12 +45,21 @@ class EnrollmentSystem:
             height=CAMERA_HEIGHT
         )
         
+        # Camera warmup - capture a few frames to stabilize
+        print("[Init] Warming up camera...")
+        for _ in range(10):
+            self.camera.read_frame()
+            time.sleep(0.1)
+        print("[Init] Camera ready!")
+        
         # Initialize LCD and Buzzer for Raspberry Pi
         if self.use_lcd:
             print("[Init] Initializing LCD...")
             self.lcd = LCDDisplay(mode=HARDWARE_MODE, i2c_address=LCD_I2C_ADDRESS)
             print("[Init] Initializing Buzzer...")
             self.buzzer = Buzzer(mode=HARDWARE_MODE, pin=BUZZER_PIN)
+            # Show ready message on LCD
+            self.lcd.display_message("Enrollment", "System Ready")
         else:
             self.lcd = None
             self.buzzer = None
@@ -83,7 +92,8 @@ class EnrollmentSystem:
         if self.lcd:
             self.lcd.display_message("Put Your Face", "In front camera")
         print("[Capture] Position your face in front of the camera...")
-        time.sleep(3)  # Give user time to position
+        print("[Capture] Waiting 5 seconds...")
+        time.sleep(5)  # Give user time to position
         
         # Step 2: Capture multiple frames
         if self.lcd:
@@ -93,28 +103,31 @@ class EnrollmentSystem:
         frames_to_capture = 15
         captured_frames = []
         retry_count = 0
-        max_retries = 30  # Max attempts to get frames
+        max_retries = 60  # Max attempts to get frames (increased)
         
         while len(captured_frames) < frames_to_capture and retry_count < max_retries:
             frame = self.camera.read_frame()
             retry_count += 1
             
             if frame is None:
-                time.sleep(0.1)
+                print(f"[Capture] Frame {retry_count}: None (retrying...)")
+                time.sleep(0.2)
                 continue
             
             captured_frames.append(frame.copy())
+            print(f"[Capture] Captured frame {len(captured_frames)}/{frames_to_capture}")
             if self.lcd:
                 self.lcd.display_message("Capturing...", f"Frame {len(captured_frames)}/{frames_to_capture}")
-            time.sleep(0.1)  # Small delay between frames
+            time.sleep(0.2)  # Delay between frames
         
         if len(captured_frames) < 5:
-            print("[Error] Could not capture enough frames")
+            print(f"[Error] Could not capture enough frames (got {len(captured_frames)}, need at least 5)")
+            print("[Error] Check camera connection or try: rpicam-hello")
             if self.lcd:
-                self.lcd.display_message("Error", "Camera issue")
+                self.lcd.display_message("Camera Error", "Check connection")
             if self.buzzer:
                 self.buzzer.error()
-            time.sleep(2)
+            time.sleep(3)
             return None
         
         print(f"[Capture] Got {len(captured_frames)} frames, analyzing...")
@@ -201,7 +214,8 @@ class EnrollmentSystem:
         if self.lcd:
             self.lcd.display_message("Show ArUco", "Marker to camera")
         print("[Capture] Show the ArUco marker to the camera...")
-        time.sleep(3)  # Give user time to position marker
+        print("[Capture] Waiting 5 seconds...")
+        time.sleep(5)  # Give user time to position marker
         
         # Step 2: Capture multiple frames
         if self.lcd:
@@ -211,28 +225,31 @@ class EnrollmentSystem:
         frames_to_capture = 15
         captured_frames = []
         retry_count = 0
-        max_retries = 30
+        max_retries = 60  # Increased
         
         while len(captured_frames) < frames_to_capture and retry_count < max_retries:
             frame = self.camera.read_frame()
             retry_count += 1
             
             if frame is None:
-                time.sleep(0.1)
+                print(f"[Capture] Frame {retry_count}: None (retrying...)")
+                time.sleep(0.2)
                 continue
             
             captured_frames.append(frame.copy())
+            print(f"[Capture] Captured frame {len(captured_frames)}/{frames_to_capture}")
             if self.lcd:
                 self.lcd.display_message("Capturing...", f"Frame {len(captured_frames)}/{frames_to_capture}")
-            time.sleep(0.1)
+            time.sleep(0.2)
         
         if len(captured_frames) < 5:
-            print("[Error] Could not capture enough frames")
+            print(f"[Error] Could not capture enough frames (got {len(captured_frames)}, need at least 5)")
+            print("[Error] Check camera connection or try: rpicam-hello")
             if self.lcd:
-                self.lcd.display_message("Error", "Camera issue")
+                self.lcd.display_message("Camera Error", "Check connection")
             if self.buzzer:
                 self.buzzer.error()
-            time.sleep(2)
+            time.sleep(3)
             return None
         
         print(f"[Capture] Got {len(captured_frames)} frames, analyzing...")
