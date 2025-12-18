@@ -38,11 +38,14 @@ class LCDDisplay:
                 address=self.i2c_address,
                 port=1,
                 cols=self.cols,
-                rows=self.rows
+                rows=self.rows,
+                backlight_enabled=True  # Ensure backlight is on
             )
             
             self.lcd.clear()
+            time.sleep(0.1)  # Small delay after clear
             # Test write to LCD
+            self.lcd.cursor_pos = (0, 0)
             self.lcd.write_string("LCD Ready!")
             print(f"[LCD] Raspberry Pi LCD initialized (Address: {hex(self.i2c_address)})")
             
@@ -78,6 +81,7 @@ class LCDDisplay:
         elif self.mode == "RASPBERRY_PI" and self.lcd:
             try:
                 self.lcd.clear()
+                time.sleep(0.05)  # Small delay after clear
                 self.lcd.cursor_pos = (0, 0)
                 self.lcd.write_string(line1[:self.cols])
                 
