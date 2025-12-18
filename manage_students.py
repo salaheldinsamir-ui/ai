@@ -110,7 +110,24 @@ def enroll_students():
     print("="*60)
     
     import subprocess
+    import os
+    
+    # Check if we're on Raspberry Pi and if attendance service is running
+    if os.path.exists('/etc/systemd/system/attendance.service'):
+        print("\n[Info] Stopping attendance service to free camera...")
+        subprocess.run(['sudo', 'systemctl', 'stop', 'attendance.service'], 
+                      capture_output=True)
+        import time
+        time.sleep(2)  # Wait for camera to be released
+    
+    # Run enrollment
     result = subprocess.run([sys.executable, "enroll_students.py"])
+    
+    # Restart service if it exists
+    if os.path.exists('/etc/systemd/system/attendance.service'):
+        print("\n[Info] Restarting attendance service...")
+        subprocess.run(['sudo', 'systemctl', 'start', 'attendance.service'],
+                      capture_output=True)
     
     if result.returncode == 0:
         print("\n✓ Enrollment completed")
