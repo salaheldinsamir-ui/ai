@@ -17,7 +17,7 @@ from ai.face_detector import FaceDetector
 from ai.face_recognition import FaceRecognizer
 from ai.aruco_detector import ArucoDetector
 from hardware.camera import Camera
-from hardware.lcd import LCD
+from hardware.lcd import LCDDisplay
 from hardware.buzzer import Buzzer
 
 
@@ -48,7 +48,7 @@ class EnrollmentSystem:
         # Initialize LCD and Buzzer for Raspberry Pi
         if self.use_lcd:
             print("[Init] Initializing LCD...")
-            self.lcd = LCD(mode=HARDWARE_MODE, i2c_address=LCD_I2C_ADDRESS)
+            self.lcd = LCDDisplay(mode=HARDWARE_MODE, i2c_address=LCD_I2C_ADDRESS)
             print("[Init] Initializing Buzzer...")
             self.buzzer = Buzzer(mode=HARDWARE_MODE, pin=BUZZER_PIN)
         else:
