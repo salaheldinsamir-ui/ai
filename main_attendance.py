@@ -183,10 +183,9 @@ class AttendanceSystem:
             current_state = STATE_STANDBY
             self.lcd.display_message("Standby", "Mode")
             time.sleep(1)
-            # Turn off LCD and camera to save power on startup
-            self.camera.stop()
+            # Turn off LCD backlight only (camera stays running)
             self.lcd.backlight_off()
-            print("[System] Starting in STANDBY mode - LCD and camera OFF")
+            print("[System] Starting in STANDBY mode - LCD OFF, camera ready")
             print("[System] Waiting for presence within 45cm...")
         else:
             current_state = STATE_WAITING
@@ -196,7 +195,7 @@ class AttendanceSystem:
         recognized_student = None
         state_start_time = time.time()
         last_presence_time = time.time()  # Track when presence was last detected
-        no_presence_timeout = 10.0  # Seconds of no presence before going to standby
+        no_presence_timeout = 25.0  # Seconds of no presence before going to standby
         
         try:
             while True:
@@ -208,17 +207,11 @@ class AttendanceSystem:
                     if self.check_presence(max_distance=45):
                         print("\n[System] Presence detected! Waking up...")
                         
-                        # Turn on LCD and camera
+                        # Turn on LCD backlight
                         self.lcd.backlight_on()
                         self.lcd.display_message("Welcome!", "Starting...")
-                        self.camera.start()
                         self.buzzer.beep(0.1)
-                        
-                        # Warmup camera
-                        print("[System] Warming up camera...")
-                        for i in range(5):
-                            self.camera.read_frame()
-                            time.sleep(0.1)
+                        time.sleep(0.5)
                         
                         current_state = STATE_WAITING
                         last_presence_time = current_time
@@ -241,10 +234,9 @@ class AttendanceSystem:
                             self.lcd.display_message("Standby", "Mode")
                             time.sleep(1)
                             
-                            # Turn off LCD and camera to save power
-                            self.camera.stop()
+                            # Turn off LCD backlight only (camera stays running)
                             self.lcd.backlight_off()
-                            print("[System] Camera and LCD turned OFF")
+                            print("[System] LCD turned OFF - standby mode")
                             
                             current_state = STATE_STANDBY
                             recognized_student = None
