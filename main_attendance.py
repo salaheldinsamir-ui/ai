@@ -278,8 +278,13 @@ class AttendanceSystem:
                         cv2.putText(frame, f"Hello, {name}!", (x, y-10),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                         
-                        self.lcd.display_message(f"Hello {name[:10]}", "Show ArUco")
+                        # Show Hello message first
+                        self.lcd.display_message(f"Hello", f"{name[:16]}")
                         self.buzzer.success_tone()
+                        time.sleep(2)  # Show Hello for 2 seconds
+                        
+                        # Then show ArUco instruction
+                        self.lcd.display_message("Show ArUco", f"Code: {aruco_id}")
                         
                         current_state = STATE_WAITING_ARUCO
                         state_start_time = current_time
@@ -307,7 +312,7 @@ class AttendanceSystem:
                     elapsed = current_time - state_start_time
                     remaining = max(0, 3 - int(elapsed))
                     
-                    self.lcd.display_message("Show ArUco", f"ID: {recognized_student['aruco_id']}")
+                    self.lcd.display_message("Show ArUco", f"Code: {recognized_student['aruco_id']}")
                     
                     frame = self.capture_multi_frame(num_frames=5)
                     if frame is not None:
@@ -334,7 +339,7 @@ class AttendanceSystem:
                 elif current_state == STATE_DETECTING_ARUCO:
                     elapsed = current_time - state_start_time
                     
-                    self.lcd.display_message("Scanning", "ArUco marker")
+                    self.lcd.display_message("Scanning", "ArUco Code...")
                     
                     frame = self.capture_multi_frame(num_frames=10)
                     if frame is None:
@@ -389,6 +394,8 @@ class AttendanceSystem:
                             print(f"[Attendance] Wrong ArUco! Expected {expected_id}, got {marker_ids}")
                             cv2.putText(frame, f"Wrong ArUco! Expected: {expected_id}", (10, 60),
                                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                            self.lcd.display_message("ArUco Wrong!", f"Need: {expected_id}")
+                            self.buzzer.error_tone()
                     else:
                         cv2.putText(frame, "Show ArUco marker to camera", (10, 30),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
@@ -398,7 +405,7 @@ class AttendanceSystem:
                     # Timeout after 10 seconds
                     if elapsed > 10.0:
                         print("[Attendance] ArUco timeout")
-                        self.lcd.display_message("ArUco", "Not detected!")
+                        self.lcd.display_message("ArUco", "Timeout!")
                         self.buzzer.error_tone()
                         current_state = STATE_WAITING
                         recognized_student = None
