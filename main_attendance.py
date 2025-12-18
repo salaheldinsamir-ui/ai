@@ -244,20 +244,26 @@ class AttendanceSystem:
                 
                 # ===== STATE: WAITING FOR FACE =====
                 if current_state == STATE_WAITING:
-                    self.lcd.display_message("Attendance", "Show your face")
+                    # Only update LCD occasionally (not every frame)
+                    if int(current_time) % 3 == 0:
+                        self.lcd.display_message("Attendance", "Show your face")
                     
                     # Capture best frame
-                    frame = self.capture_multi_frame(num_frames=10)
+                    frame = self.capture_multi_frame(num_frames=5)  # Reduced from 10 for speed
                     if frame is None:
                         print("[Error] Failed to capture frame")
                         time.sleep(0.5)
                         continue
+                    
+                    # Debug: Show frame was captured
+                    print(f"[Debug] Frame captured: {frame.shape if frame is not None else 'None'}")
                     
                     # Try to detect face
                     face_roi, face_bbox = self.face_detector.get_single_face(frame)
                     
                     if face_roi is not None:
                         x, y, w, h = face_bbox
+                        print(f"[Debug] Face detected at: x={x}, y={y}, w={w}, h={h}")
                         cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
                         cv2.putText(frame, "Face detected!", (10, 30),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
@@ -269,6 +275,8 @@ class AttendanceSystem:
                         self.lcd.display_message("Face Found", "Recognizing...")
                         self.buzzer.beep(0.1)
                     else:
+                        # Debug: Print that no face was found
+                        print("[Debug] No face detected in frame")
                         cv2.putText(frame, "Show your face to camera", (10, 30),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     
@@ -280,7 +288,7 @@ class AttendanceSystem:
                         elif key == ord('s'):
                             self.show_statistics()
                     else:
-                        time.sleep(0.1)
+                        time.sleep(0.2)  # Small delay between checks
                 
                 # ===== STATE: DETECTING & RECOGNIZING FACE =====
                 elif current_state == STATE_DETECTING_FACE:
