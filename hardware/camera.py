@@ -45,6 +45,7 @@ class Camera:
         """Initialize Raspberry Pi camera"""
         try:
             from picamera2 import Picamera2
+            import time
             
             self.camera = Picamera2()
             config = self.camera.create_preview_configuration(
@@ -53,11 +54,17 @@ class Camera:
             self.camera.configure(config)
             self.camera.start()
             
+            # Give camera time to warm up
+            time.sleep(2)
+            
             print(f"[Camera] Raspberry Pi camera initialized: {self.width}x{self.height}")
             
         except ImportError:
             print("[Camera] Warning: picamera2 not available, falling back to PC camera")
             self._init_pc_camera(0)
+        except Exception as e:
+            print(f"[Camera] Error initializing Pi camera: {e}")
+            raise
             
     def read_frame(self):
         """
