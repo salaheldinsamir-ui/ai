@@ -126,7 +126,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Camera Error", "Check connection")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(3)
             return None
         
@@ -156,7 +156,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("No Face Found", "Try again")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(2)
             return None
         
@@ -173,7 +173,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Error", "Face unclear")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(2)
             return None
         
@@ -186,7 +186,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Success!", "Face captured")
             if self.buzzer:
-                self.buzzer.success()
+                self.buzzer.success_tone()
             time.sleep(2)
             return face_embedding
         else:
@@ -194,7 +194,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Error", "Try again")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(2)
             return None
         
@@ -248,7 +248,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Camera Error", "Check connection")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(3)
             return None
         
@@ -273,7 +273,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("No Marker", "Try again")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(2)
             return None
         
@@ -288,7 +288,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Marker unclear", "Try again")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(2)
             return None
         
@@ -297,7 +297,7 @@ class EnrollmentSystem:
         if self.lcd:
             self.lcd.display_message("Success!", f"Marker: {best_marker_id}")
         if self.buzzer:
-            self.buzzer.success()
+            self.buzzer.success_tone()
         time.sleep(2)
         
         return best_marker_id
@@ -327,9 +327,9 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Enrolled!", f"{name}")
             if self.buzzer:
-                self.buzzer.success()
+                self.buzzer.success_tone()
                 time.sleep(0.2)
-                self.buzzer.success()
+                self.buzzer.success_tone()
             time.sleep(3)
             return student_id
         else:
@@ -337,7 +337,7 @@ class EnrollmentSystem:
             if self.lcd:
                 self.lcd.display_message("Error", "ID exists")
             if self.buzzer:
-                self.buzzer.error()
+                self.buzzer.error_tone()
             time.sleep(3)
             return None
             

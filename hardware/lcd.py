@@ -42,11 +42,19 @@ class LCDDisplay:
             )
             
             self.lcd.clear()
+            # Test write to LCD
+            self.lcd.write_string("LCD Ready!")
             print(f"[LCD] Raspberry Pi LCD initialized (Address: {hex(self.i2c_address)})")
             
-        except ImportError:
-            print("[LCD] Warning: RPLCD not available, using simulation mode")
+        except ImportError as e:
+            print(f"[LCD] Warning: RPLCD not available ({e}), using simulation mode")
+            print("[LCD] Install with: pip install RPLCD")
             self.mode = "PC"
+        except Exception as e:
+            print(f"[LCD] Error initializing LCD: {e}")
+            print(f"[LCD] Check I2C address with: sudo i2cdetect -y 1")
+            self.mode = "PC"
+            self.lcd = None
             
     def display_message(self, line1, line2=""):
         """
@@ -56,13 +64,16 @@ class LCDDisplay:
             line1: First line text
             line2: Second line text (optional)
         """
-        if self.mode == "PC":
+        # Always print to terminal for debugging
+        print(f"[LCD Display] Line1: {line1} | Line2: {line2}")
+        
+        if self.mode == "PC" or self.lcd is None:
             # Simulate LCD display in terminal
-            print("\n" + "="*40)
-            print(f"[LCD] {line1[:self.cols].center(self.cols)}")
+            print("="*20)
+            print(f"| {line1[:self.cols].center(self.cols)} |")
             if line2:
-                print(f"[LCD] {line2[:self.cols].center(self.cols)}")
-            print("="*40 + "\n")
+                print(f"| {line2[:self.cols].center(self.cols)} |")
+            print("="*20)
             
         elif self.mode == "RASPBERRY_PI" and self.lcd:
             try:
