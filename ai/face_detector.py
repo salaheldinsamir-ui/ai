@@ -24,7 +24,32 @@ class FaceDetector:
         
         if backend == "opencv":
             # Load Haar Cascade classifier
-            cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+            # Try multiple possible locations for the cascade file
+            cascade_paths = [
+                # Standard OpenCV installation
+                cv2.data.haarcascades + 'haarcascade_frontalface_default.xml' if hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades') else None,
+                # Common Linux installation paths
+                '/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml',
+                '/usr/local/share/opencv4/haarcascades/haarcascade_frontalface_default.xml',
+                '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml',
+                # Raspberry Pi common paths
+                '/usr/local/lib/python3.9/dist-packages/cv2/data/haarcascade_frontalface_default.xml',
+                '/usr/local/lib/python3.11/dist-packages/cv2/data/haarcascade_frontalface_default.xml',
+            ]
+            
+            # Filter out None values and find the first existing path
+            cascade_path = None
+            for path in cascade_paths:
+                if path and os.path.exists(path):
+                    cascade_path = path
+                    break
+            
+            if cascade_path is None:
+                raise FileNotFoundError(
+                    "Could not find haarcascade_frontalface_default.xml. "
+                    "Please ensure OpenCV is properly installed with cascade files."
+                )
+            
             self.detector = cv2.CascadeClassifier(cascade_path)
             
     def detect_faces(self, frame):

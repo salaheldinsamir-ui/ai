@@ -1,381 +1,598 @@
-# AI-Powered Attendance System
+# 📋 Smart Attendance System - Complete Guide
 
-An automated attendance system using face recognition and ArUco tag verification, designed to run on both PC (development) and Raspberry Pi 4 (production).
+A Raspberry Pi-based attendance system using **face recognition** and **ArUco markers** for accurate student identification. Features a modern web UI accessible from any phone or device.
 
-## 🎯 Features
+## 📸 Screenshots
 
-- **Dual Authentication**: Face recognition + ArUco marker verification
-- **Presence Detection**: Ultrasonic sensors prevent spoofing attacks
-- **One-Time Enrollment**: Secure enrollment with permanent attendance operation
-- **Hardware Abstraction**: Seamless transition from PC to Raspberry Pi
-- **Real-time Processing**: Continuous attendance monitoring
-- **LCD Display & Buzzer**: Visual and audio feedback
+### Web Interface
+![AI Attendance System Interface 1](screenshots/AI%201.png)
+![AI Attendance System Interface 2](screenshots/AI%202.png)
+
+---
+
+## 📑 Table of Contents
+
+1. [System Overview](#system-overview)
+2. [Hardware Requirements](#hardware-requirements)
+3. [Software Requirements](#software-requirements)
+4. [Installation](#installation)
+5. [Database Schema](#database-schema)
+6. [Web UI Guide](#web-ui-guide)
+7. [WiFi Hotspot Setup](#wifi-hotspot-setup)
+8. [Running the System](#running-the-system)
+9. [Troubleshooting](#troubleshooting)
+
+---
+
+## 🎯 System Overview
+
+### How It Works
+
+1. **Student Enrollment**: Each student registers with:
+
+   - Their face (for face recognition)
+   - A unique ArUco marker ID (for quick identification)
+
+2. **Attendance Tracking**: When taking attendance:
+
+   - Student shows ArUco marker to camera
+   - System detects marker and identifies student
+   - Face verification confirms identity
+   - Attendance is recorded with timestamp
+
+3. **Web Management**: Access via phone/browser to:
+   - Enroll new students
+   - View attendance records
+   - Manage student database
+   - Control system settings
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    RASPBERRY PI                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   Camera     │  │  Ultrasonic  │  │    LCD       │       │
+│  │  (Pi Camera) │  │   Sensor     │  │  Display     │       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
+│         │                 │                 │                │
+│  ┌──────▼─────────────────▼─────────────────▼───────┐       │
+│  │              ATTENDANCE ENGINE                     │       │
+│  │  • Face Detection (OpenCV/DeepFace)               │       │
+│  │  • ArUco Marker Detection                          │       │
+│  │  • Face Recognition & Matching                     │       │
+│  └──────────────────────┬───────────────────────────┘       │
+│                         │                                    │
+│  ┌──────────────────────▼───────────────────────────┐       │
+│  │              SQLite DATABASE                       │       │
+│  │  • Students (name, aruco_id, face_embedding)      │       │
+│  │  • Attendance (student_id, date, time, status)    │       │
+│  └──────────────────────────────────────────────────┘       │
+│                                                              │
+│  ┌──────────────────────────────────────────────────┐       │
+│  │              WEB MANAGER (Flask)                   │       │
+│  │  • Port 4000                                       │       │
+│  │  • Mobile-friendly UI                              │       │
+│  │  • Enrollment, Attendance View, Settings          │       │
+│  └──────────────────────────────────────────────────┘       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+         │
+         │ WiFi / Hotspot
+         ▼
+    ┌─────────────┐
+    │   Phone     │
+    │   Browser   │
+    │ 192.168.x.x │
+    └─────────────┘
+```
+
+---
+
+## 🔧 Hardware Requirements
+
+| Component                   | Description         | Connection |
+| --------------------------- | ------------------- | ---------- |
+| Raspberry Pi 4/5            | Main controller     | -          |
+| Pi Camera Module            | Face/ArUco capture  | CSI port   |
+| Ultrasonic Sensor (HC-SR04) | Proximity detection | GPIO       |
+| I2C LCD Display (16x2)      | Status display      | I2C        |
+| Buzzer                      | Audio feedback      | GPIO       |
+| Power Supply                | 5V 3A               | USB-C      |
+
+### GPIO Pin Configuration
+
+```
+┌─────────────────────────────────────────┐
+│           RASPBERRY PI GPIO             │
+├─────────────────────────────────────────┤
+│                                         │
+│  Ultrasonic Sensor (HC-SR04):           │
+│    • TRIG → GPIO 23                     │
+│    • ECHO → GPIO 24                     │
+│    • VCC  → 5V                          │
+│    • GND  → GND                         │
+│                                         │
+│  Buzzer:                                │
+│    • Signal → GPIO 18                   │
+│    • GND    → GND                       │
+│                                         │
+│  LCD Display (I2C):                     │
+│    • SDA → GPIO 2 (SDA)                 │
+│    • SCL → GPIO 3 (SCL)                 │
+│    • VCC → 5V                           │
+│    • GND → GND                          │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 💻 Software Requirements
+
+- **Raspberry Pi OS** (64-bit recommended)
+- **Python 3.9+**
+- **OpenCV** with ArUco support
+- **DeepFace** for face recognition
+- **Flask** for web UI
+
+---
+
+## 📦 Installation
+
+### Step 1: Clone the Repository
+
+```bash
+cd ~
+git clone https://github.com/salaheldinsamir-ui/ai.git
+cd ai
+```
+
+### Step 2: Run the Setup Script
+
+```bash
+chmod +x install_raspberry.sh
+./install_raspberry.sh
+```
+
+Or manual installation:
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Step 3: Configure the System
+
+Edit `config.py` to match your setup:
+
+```python
+# Hardware mode: "RASPBERRY_PI" or "PC"
+HARDWARE_MODE = "RASPBERRY_PI"
+
+# Camera settings
+CAMERA_INDEX = 0
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+
+# GPIO pins (Raspberry Pi only)
+BUZZER_PIN = 18
+ULTRASONIC_TRIG = 23
+ULTRASONIC_ECHO = 24
+LCD_I2C_ADDRESS = 0x27
+```
+
+### Step 4: Test Hardware
+
+```bash
+source venv/bin/activate
+python test_hardware.py
+```
+
+### Step 5: Set Up Services (Auto-start)
+
+```bash
+# Copy service files
+sudo cp attendance.service /etc/systemd/system/
+sudo cp web_manager.service /etc/systemd/system/
+
+# Enable services
+sudo systemctl enable attendance.service
+sudo systemctl enable web_manager.service
+
+# Start services
+sudo systemctl start attendance.service
+sudo systemctl start web_manager.service
+```
+
+---
+
+## 🗄️ Database Schema
+
+The system uses SQLite with two main tables:
+
+### Students Table
+
+```sql
+CREATE TABLE students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    aruco_id INTEGER UNIQUE NOT NULL,
+    face_embedding BLOB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+| Column           | Type      | Description                               |
+| ---------------- | --------- | ----------------------------------------- |
+| `id`             | INTEGER   | Auto-incrementing primary key             |
+| `name`           | TEXT      | Student's full name                       |
+| `aruco_id`       | INTEGER   | Unique ArUco marker ID (0-249)            |
+| `face_embedding` | BLOB      | Serialized face embedding vector (pickle) |
+| `created_at`     | TIMESTAMP | Enrollment timestamp                      |
+
+### Attendance Table
+
+```sql
+CREATE TABLE attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    time TEXT NOT NULL,
+    status TEXT NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    UNIQUE(student_id, date)
+);
+```
+
+| Column       | Type    | Description                   |
+| ------------ | ------- | ----------------------------- |
+| `id`         | INTEGER | Auto-incrementing primary key |
+| `student_id` | INTEGER | Foreign key to students table |
+| `date`       | TEXT    | Attendance date (YYYY-MM-DD)  |
+| `time`       | TEXT    | Check-in time (HH:MM:SS)      |
+| `status`     | TEXT    | Attendance status ("present") |
+
+### Database Diagram
+
+```
+┌─────────────────────┐       ┌─────────────────────┐
+│      STUDENTS       │       │     ATTENDANCE      │
+├─────────────────────┤       ├─────────────────────┤
+│ id (PK)             │───┐   │ id (PK)             │
+│ name                │   │   │ student_id (FK)  ◄──┘
+│ aruco_id (UNIQUE)   │   │   │ date               │
+│ face_embedding      │   │   │ time               │
+│ created_at          │   │   │ status             │
+└─────────────────────┘   │   │                     │
+                          │   │ UNIQUE(student_id,  │
+                          └──►│        date)        │
+                              └─────────────────────┘
+```
+
+### Database Location
+
+```
+~/ai/data/attendance.db
+```
+
+### Viewing Database (Command Line)
+
+```bash
+sqlite3 ~/ai/data/attendance.db
+
+# List all students
+SELECT id, name, aruco_id, created_at FROM students;
+
+# View today's attendance
+SELECT s.name, a.time, a.status
+FROM attendance a
+JOIN students s ON a.student_id = s.id
+WHERE a.date = date('now');
+
+# Exit
+.quit
+```
+
+---
+
+## 🌐 Web UI Guide
+
+### Accessing the Web UI
+
+1. **Same WiFi Network**: `http://<raspberry-pi-ip>:4000`
+2. **Hotspot Mode**: `http://10.42.0.1:4000`
+
+Find Pi's IP: `hostname -I`
+
+### Home Screen
+
+![Home](https://via.placeholder.com/300x500?text=Home+Screen)
+
+The home screen shows:
+
+- **Students Enrolled**: Total number of registered students
+- **Present Today**: Students who checked in today
+- **Quick Actions**: Navigation buttons
+
+### 📱 Navigation
+
+| Button            | Function                        |
+| ----------------- | ------------------------------- |
+| 🏠 **Home**       | Dashboard with stats            |
+| 👥 **Students**   | View/delete enrolled students   |
+| ➕ **Enroll**     | Add new students                |
+| ✅ **Attendance** | View today's attendance         |
+| ⚙️ **Settings**   | System settings & hotspot guide |
+
+---
+
+### ➕ Enrolling a New Student
+
+1. **Go to Enroll** page (tap ➕)
+
+2. **Enter Student Details**:
+
+   - Student Name
+   - ArUco Marker ID (0-249)
+
+3. **Tap "Start Enrollment"**
+
+4. **Face Capture**:
+
+   - Position student's face in front of camera
+   - Wait for green checkmark
+
+5. **ArUco Verification**:
+
+   - Show the ArUco marker to camera
+   - Wait for verification
+
+6. **Complete**: Student is enrolled!
+
+> **Note**: The system automatically stops the attendance service during enrollment to use the camera, then restarts it after.
+
+---
+
+### 👥 Managing Students
+
+**View Students**:
+
+- Shows all enrolled students with their ArUco IDs
+
+**Delete Student**:
+
+- Tap 🗑️ next to student name
+- Confirm deletion
+
+**Delete All Students**:
+
+- Scroll down and tap "Delete All Students"
+- ⚠️ This cannot be undone!
+
+---
+
+### ✅ Viewing Attendance
+
+The attendance page shows:
+
+- **Present Count**: X out of Y students
+- **Attendance Rate**: Percentage
+- **Attendance Log**: List of students with check-in times
+
+---
+
+### 🔄 Reset Attendance
+
+Use to allow a student to check in again:
+
+1. Go to **Reset** page
+2. Find the student
+3. Tap **Reset** button
+
+**Reset All Today**: Clears all attendance for today
+
+---
+
+### 🖨️ Generate ArUco Markers
+
+1. Go to **Enroll** page
+2. Scroll to "Generate ArUco Markers"
+3. Enter:
+   - Start ID (default: 0)
+   - Count (default: 30)
+4. Tap **Generate Markers**
+5. Find markers in: `~/ai/aruco_markers/`
+
+Print the markers and assign one to each student.
+
+---
+
+## 📶 WiFi Hotspot Setup
+
+Make your Raspberry Pi a WiFi hotspot for direct phone connection.
+
+### Quick Setup (NetworkManager)
+
+```bash
+# Create hotspot
+sudo nmcli device wifi hotspot ssid "AttendancePi" password "attendance123"
+
+# Make it permanent (start on boot)
+sudo nmcli connection modify Hotspot connection.autoconnect yes
+```
+
+### Connect from Phone
+
+1. **WiFi**: AttendancePi
+2. **Password**: attendance123
+3. **Browser**: `http://10.42.0.1:4000`
+
+### Disable Hotspot (Return to WiFi)
+
+```bash
+# Disable hotspot
+sudo nmcli connection down Hotspot
+
+# Connect to your WiFi
+sudo nmcli device wifi connect "YourWiFi" password "YourPassword"
+```
+
+### Using the Setup Script
+
+```bash
+chmod +x setup_hotspot.sh
+sudo bash setup_hotspot.sh
+```
+
+---
+
+## 🚀 Running the System
+
+### Manual Start
+
+```bash
+cd ~/ai
+source venv/bin/activate
+
+# Terminal 1: Start Attendance Engine
+python main_attendance.py
+
+# Terminal 2: Start Web Manager
+python web_manager.py
+```
+
+### Service Commands
+
+```bash
+# Start services
+sudo systemctl start attendance.service
+sudo systemctl start web_manager.service
+
+# Stop services
+sudo systemctl stop attendance.service
+sudo systemctl stop web_manager.service
+
+# Restart services
+sudo systemctl restart attendance.service
+sudo systemctl restart web_manager.service
+
+# View logs
+sudo journalctl -u attendance.service -f
+sudo journalctl -u web_manager.service -f
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Camera Issues
+
+**Error**: "Camera **init** sequence did not complete"
+
+```bash
+# Stop attendance service
+sudo systemctl stop attendance.service
+
+# Test camera
+rpicam-hello
+
+# If camera works, restart service
+sudo systemctl start attendance.service
+```
+
+### Web UI Not Loading
+
+```bash
+# Check if web manager is running
+sudo systemctl status web_manager.service
+
+# Check Pi's IP
+hostname -I
+
+# Try both IPs
+http://<ip>:4000
+http://10.42.0.1:4000
+```
+
+### Face Not Detected
+
+- Ensure good lighting
+- Face should be clearly visible
+- Only one face in frame
+- Remove glasses if reflective
+
+### ArUco Not Detected
+
+- Print marker clearly (no blur)
+- Hold marker flat to camera
+- Ensure good lighting
+- Marker size: at least 5cm x 5cm
+
+### Database Reset
+
+```bash
+# Backup first!
+cp ~/ai/data/attendance.db ~/ai/data/attendance.db.backup
+
+# Reset database
+rm ~/ai/data/attendance.db
+python -c "from database.db_manager import DatabaseManager; DatabaseManager('data/attendance.db')"
+```
+
+---
 
 ## 📁 Project Structure
 
 ```
 attendance_system/
-├── main_attendance.py          # Main attendance program (auto-start)
-├── enroll_students.py          # One-time student enrollment
-├── attendance_engine.py        # Core attendance logic
-├── config.py                   # System configuration
-├── requirements.txt            # Python dependencies
-│
-├── ai/                         # AI modules
-│   ├── face_detector.py       # Face detection
-│   ├── face_recognition.py    # Face embedding & recognition
-│   └── aruco_detector.py      # ArUco marker detection
-│
-├── hardware/                   # Hardware abstraction
-│   ├── camera.py              # Camera interface (PC/Pi)
-│   ├── ultrasonic.py          # Ultrasonic sensors
-│   ├── lcd.py                 # LCD display
-│   └── buzzer.py              # Buzzer control
-│
-├── database/                   # Database management
-│   ├── db_manager.py          # SQLite operations
-│   └── attendance.db          # SQLite database (created on first run)
-│
-└── utils/                      # Utilities
-    └── similarity.py          # Cosine similarity calculation
+├── ai/
+│   ├── aruco_detector.py    # ArUco marker detection
+│   ├── face_detector.py     # Face detection
+│   └── face_recognition.py  # Face embedding & matching
+├── database/
+│   └── db_manager.py        # SQLite database operations
+├── hardware/
+│   ├── camera.py            # Camera interface
+│   ├── lcd.py               # LCD display control
+│   ├── buzzer.py            # Buzzer control
+│   └── ultrasonic.py        # Ultrasonic sensor
+├── utils/
+│   └── similarity.py        # Face similarity calculation
+├── data/
+│   └── attendance.db        # SQLite database
+├── aruco_markers/           # Generated ArUco markers
+├── config.py                # Configuration settings
+├── main_attendance.py       # Main attendance engine
+├── web_manager.py           # Flask web UI
+├── enroll_students.py       # CLI enrollment script
+├── attendance.service       # Systemd service file
+├── web_manager.service      # Systemd service file
+├── setup_hotspot.sh         # WiFi hotspot setup
+└── requirements.txt         # Python dependencies
 ```
-
-## 🚀 Phase 1: PC Development & Testing
-
-### Prerequisites
-
-- Python 3.8 or higher
-- Webcam
-- Windows/Linux/MacOS
-
-### Installation
-
-1. **Clone or download this project**
-
-2. **Install dependencies**:
-
-```bash
-cd attendance_system
-pip install -r requirements.txt
-```
-
-3. **Configure for PC mode**:
-
-   Open [config.py](config.py) and ensure:
-
-   ```python
-   HARDWARE_MODE = "PC"
-   ```
-
-### Usage
-
-#### Step 1: Generate ArUco Markers
-
-```bash
-python enroll_students.py
-# Select option 2: Generate ArUco markers
-```
-
-This creates printable ArUco markers in the `aruco_markers/` folder. Print these markers for each student.
-
-#### Step 2: Enroll Students
-
-```bash
-python enroll_students.py
-# Select option 1: Enroll students
-```
-
-For each student:
-
-1. Enter their name
-2. Position face in front of camera and press SPACE
-3. Show ArUco marker to camera and press SPACE
-4. Repeat for all students
-
-#### Step 3: Run Attendance System
-
-```bash
-python main_attendance.py
-```
-
-The system will:
-
-- Display camera feed in a window
-- Continuously check for face + ArUco markers
-- Mark attendance when all conditions are met
-- Show status on terminal (simulating LCD)
-- Play beep sounds (simulating buzzer)
-
-**Controls**:
-
-- `Q`: Quit
-- `S`: Show attendance statistics
-
-### Viewing Enrolled Students
-
-```bash
-python enroll_students.py
-# Select option 3: View enrolled students
-```
-
-## 🔧 Phase 2: Raspberry Pi Deployment
-
-### Hardware Requirements
-
-- Raspberry Pi 4 (4GB)
-- Pi Camera (5MP or higher)
-- 2× Ultrasonic Sensors (HC-SR04)
-- I2C LCD Display (16x2)
-- Buzzer
-- Jumper wires
-- Power supply
-
-### Wiring Diagram
-
-**Ultrasonic Sensor 1**:
-
-- Trigger: GPIO 23
-- Echo: GPIO 24
-
-**Ultrasonic Sensor 2**:
-
-- Trigger: GPIO 27
-- Echo: GPIO 22
-
-**LCD Display**:
-
-- I2C Address: 0x27 (default)
-- SDA: GPIO 2
-- SCL: GPIO 3
-
-**Buzzer**:
-
-- Signal: GPIO 17
-- GND: Ground
-
-### Raspberry Pi Setup
-
-1. **Install Raspberry Pi OS** (64-bit recommended)
-
-2. **Enable camera and I2C**:
-
-```bash
-sudo raspi-config
-# Interface Options → Camera → Enable
-# Interface Options → I2C → Enable
-# Reboot
-```
-
-3. **Install dependencies**:
-
-```bash
-cd attendance_system
-pip install -r requirements.txt
-
-# Raspberry Pi specific
-sudo apt-get install python3-picamera2
-pip install RPi.GPIO RPLCD
-```
-
-4. **Configure for Raspberry Pi mode**:
-
-   Edit [config.py](config.py):
-
-   ```python
-   HARDWARE_MODE = "RASPBERRY_PI"
-   ```
-
-5. **Copy enrolled database from PC**:
-
-   Transfer `database/attendance.db` from PC to Raspberry Pi
-
-6. **Run attendance system**:
-
-```bash
-python main_attendance.py
-```
-
-### Auto-Start on Boot
-
-Create systemd service:
-
-```bash
-sudo nano /etc/systemd/system/attendance.service
-```
-
-Add:
-
-```ini
-[Unit]
-Description=Attendance System
-After=multi-user.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/attendance_system
-ExecStart=/usr/bin/python3 /home/pi/attendance_system/main_attendance.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable attendance.service
-sudo systemctl start attendance.service
-```
-
-## ⚙️ Configuration
-
-Edit [config.py](config.py) to customize:
-
-- **Face Recognition**:
-
-  - `FACE_RECOGNITION_THRESHOLD`: Similarity threshold (0.6 default)
-  - `FACE_MODEL`: Model choice ("Facenet", "VGG-Face", "ArcFace")
-
-- **Camera**:
-
-  - `CAMERA_WIDTH`, `CAMERA_HEIGHT`: Resolution
-  - `CAMERA_INDEX`: Webcam index (PC only)
-
-- **Distance Detection**:
-
-  - `MIN_DISTANCE`: Minimum valid distance (30 cm)
-  - `MAX_DISTANCE`: Maximum valid distance (100 cm)
-
-- **ArUco**:
-  - `ARUCO_DICT`: Dictionary type ("DICT_4X4_50" default)
-
-## 🔒 Security Features
-
-1. **Dual Authentication**: Requires both face match AND ArUco tag match
-2. **Single Person Validation**: Rejects multiple faces in frame
-3. **Anti-Spoofing**: Ultrasonic sensors validate physical presence
-4. **Quality Checks**: Validates image brightness, contrast, and sharpness
-5. **One-Time Enrollment**: No runtime face registration possible
-6. **Daily Attendance**: Prevents duplicate attendance on same day
-
-## 📊 Database Schema
-
-**students table**:
-
-```sql
-id              INTEGER PRIMARY KEY
-name            TEXT NOT NULL
-aruco_id        INTEGER UNIQUE NOT NULL
-face_embedding  BLOB NOT NULL
-created_at      TIMESTAMP
-```
-
-**attendance table**:
-
-```sql
-id          INTEGER PRIMARY KEY
-student_id  INTEGER (foreign key)
-date        TEXT (YYYY-MM-DD)
-time        TEXT (HH:MM:SS)
-status      TEXT (default: "Present")
-UNIQUE(student_id, date)  -- Prevents duplicates
-```
-
-## 🐛 Troubleshooting
-
-### PC Mode Issues
-
-**Camera not detected**:
-
-- Check camera permissions
-- Try different `CAMERA_INDEX` values (0, 1, 2)
-
-**Face recognition slow**:
-
-- Reduce camera resolution in [config.py](config.py)
-- Use lighter model like "OpenFace"
-
-**DeepFace installation issues**:
-
-```bash
-pip install --upgrade deepface tf-keras tensorflow
-```
-
-### Raspberry Pi Issues
-
-**Camera not working**:
-
-```bash
-# Check camera detection
-libcamera-hello
-
-# If using old Pi Camera v1
-sudo raspi-config  # Enable legacy camera
-```
-
-**I2C LCD not detected**:
-
-```bash
-# Scan I2C devices
-sudo i2cdetect -y 1
-
-# If address differs from 0x27, update config.py
-```
-
-**GPIO permission denied**:
-
-```bash
-sudo usermod -a -G gpio pi
-sudo reboot
-```
-
-## 📈 Performance
-
-**PC Mode**:
-
-- Face detection: ~30 FPS
-- Face recognition: ~2-3 seconds per check
-- Memory usage: ~500 MB
-
-**Raspberry Pi 4**:
-
-- Face detection: ~15 FPS
-- Face recognition: ~3-5 seconds per check
-- Memory usage: ~1 GB
-
-## 🔄 Updating from PC to Pi
-
-1. Test thoroughly on PC
-2. Copy entire project folder to Raspberry Pi
-3. Transfer `database/attendance.db`
-4. Change `HARDWARE_MODE` to "RASPBERRY_PI"
-5. Install Pi-specific libraries
-6. No code changes needed!
-
-## 📝 License
-
-This project is provided as-is for educational purposes.
-
-## 👥 Contributing
-
-Improvements welcome! Focus areas:
-
-- Multi-threading for performance
-- Additional anti-spoofing methods
-- Web interface for attendance reports
-- Email notifications
-
-## 📧 Support
-
-For issues, check:
-
-1. Configuration in [config.py](config.py)
-2. Log output in terminal
-3. Database integrity
-4. Camera and hardware connections
 
 ---
 
-**System Status**: ✓ PC Development Ready | ⏳ Raspberry Pi Deployment Ready
+## 📄 License
+
+This project is open source. Feel free to modify and use for your needs.
+
+---
+
+## 🆘 Support
+
+For issues or questions:
+
+1. Check the [Troubleshooting](#troubleshooting) section
+2. Review logs: `sudo journalctl -u attendance.service -f`
+3. Open an issue on GitHub
+
+---

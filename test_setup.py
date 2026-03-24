@@ -38,6 +38,19 @@ def test_camera():
     """Test camera access"""
     print("\nTesting camera access...")
     
+    # First try picamera2 (Raspberry Pi Camera)
+    try:
+        from picamera2 import Picamera2
+        cam = Picamera2()
+        cam.start()
+        frame = cam.capture_array()
+        cam.stop()
+        print(f"  ✓ Pi Camera working! Resolution: {frame.shape[1]}x{frame.shape[0]}")
+        return True
+    except Exception as e:
+        pass  # Try OpenCV next
+    
+    # Fall back to OpenCV (USB webcam / PC)
     try:
         import cv2
         cap = cv2.VideoCapture(0)

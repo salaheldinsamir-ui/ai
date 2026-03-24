@@ -1,0 +1,18 @@
+[Unit]
+Description=AI-Powered Attendance System
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/ai
+Environment="PATH=/home/pi/ai/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="VIRTUAL_ENV=/home/pi/ai/venv"
+ExecStart=/home/pi/ai/venv/bin/python /home/pi/ai/main_attendance.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

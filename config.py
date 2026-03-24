@@ -29,6 +29,7 @@ MIN_SHARPNESS = 50   # Minimum sharpness/Laplacian variance (default: 50)
 ARUCO_DICT = "DICT_4X4_50"  # ArUco dictionary type
 
 # Ultrasonic sensor configuration (Raspberry Pi only)
+ULTRASONIC_ENABLED = False  # Set to True to enable ultrasonic sensors
 ULTRASONIC_SENSOR_1_TRIGGER = 23
 ULTRASONIC_SENSOR_1_ECHO = 24
 ULTRASONIC_SENSOR_2_TRIGGER = 27

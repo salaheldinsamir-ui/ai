@@ -83,6 +83,13 @@ class AttendanceEngine:
         Returns:
             True if presence detected within valid range
         """
+        # Import config to check if ultrasonic is enabled
+        from config import ULTRASONIC_ENABLED
+        
+        # If ultrasonic sensors are disabled, always return True (presence assumed)
+        if not ULTRASONIC_ENABLED:
+            return True
+        
         # Check both sensors
         presence1 = self.ultrasonic1.check_presence(min_distance, max_distance)
         presence2 = self.ultrasonic2.check_presence(min_distance, max_distance)

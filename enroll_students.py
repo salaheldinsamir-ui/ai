@@ -17,6 +17,8 @@ from ai.face_detector import FaceDetector
 from ai.face_recognition import FaceRecognizer
 from ai.aruco_detector import ArucoDetector
 from hardware.camera import Camera
+from hardware.lcd import LCDDisplay
+from hardware.buzzer import Buzzer
 
 
 class EnrollmentSystem:
@@ -31,6 +33,9 @@ class EnrollmentSystem:
         print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*50)
         
+        # Initialize hardware based on mode
+        self.use_lcd = (HARDWARE_MODE == "RASPBERRY_PI")
+        
         # Initialize camera
         print("\n[Init] Initializing camera...")
         self.camera = Camera(
@@ -39,6 +44,25 @@ class EnrollmentSystem:
             width=CAMERA_WIDTH,
             height=CAMERA_HEIGHT
         )
+        
+        # Camera warmup - capture a few frames to stabilize
+        print("[Init] Warming up camera...")
+        for _ in range(10):
+            self.camera.read_frame()
+            time.sleep(0.1)
+        print("[Init] Camera ready!")
+        
+        # Initialize LCD and Buzzer for Raspberry Pi
+        if self.use_lcd:
+            print("[Init] Initializing LCD...")
+            self.lcd = LCDDisplay(mode=HARDWARE_MODE, i2c_address=LCD_I2C_ADDRESS)
+            print("[Init] Initializing Buzzer...")
+            self.buzzer = Buzzer(mode=HARDWARE_MODE, pin=BUZZER_PIN)
+            # Show ready message on LCD
+            self.lcd.display_message("Enrollment", "System Ready")
+        else:
+            self.lcd = None
+            self.buzzer = None
         
         # Initialize AI modules
         print("[Init] Initializing AI modules...")
@@ -54,7 +78,7 @@ class EnrollmentSystem:
         
     def capture_face_embedding(self, student_name):
         """
-        Capture face and generate embedding
+        Capture face and generate embedding using multi-frame capture
         
         Args:
             student_name: Name of student
@@ -63,72 +87,120 @@ class EnrollmentSystem:
             Face embedding or None
         """
         print(f"\n[Capture] Capturing face for: {student_name}")
+        
+        # Step 1: Show initial instruction on LCD
+        if self.lcd:
+            self.lcd.display_message("Put Your Face", "In front camera")
         print("[Capture] Position your face in front of the camera...")
-        print("[Capture] Press SPACE to capture, ESC to cancel")
+        print("[Capture] Waiting 5 seconds...")
+        time.sleep(5)  # Give user time to position
         
-        captured = False
-        face_embedding = None
+        # Step 2: Capture multiple frames
+        if self.lcd:
+            self.lcd.display_message("Capturing...", "Hold still!")
+        print("[Capture] Capturing frames...")
         
-        while not captured:
+        frames_to_capture = 15
+        captured_frames = []
+        retry_count = 0
+        max_retries = 60  # Max attempts to get frames (increased)
+        
+        while len(captured_frames) < frames_to_capture and retry_count < max_retries:
             frame = self.camera.read_frame()
+            retry_count += 1
             
             if frame is None:
-                print("[Error] Failed to read frame")
-                time.sleep(0.1)
+                print(f"[Capture] Frame {retry_count}: None (retrying...)")
+                time.sleep(0.2)
                 continue
-                
-            # Detect faces
+            
+            captured_frames.append(frame.copy())
+            print(f"[Capture] Captured frame {len(captured_frames)}/{frames_to_capture}")
+            if self.lcd:
+                self.lcd.display_message("Capturing...", f"Frame {len(captured_frames)}/{frames_to_capture}")
+            time.sleep(0.2)  # Delay between frames
+        
+        if len(captured_frames) < 5:
+            print(f"[Error] Could not capture enough frames (got {len(captured_frames)}, need at least 5)")
+            print("[Error] Check camera connection or try: rpicam-hello")
+            if self.lcd:
+                self.lcd.display_message("Camera Error", "Check connection")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(3)
+            return None
+        
+        print(f"[Capture] Got {len(captured_frames)} frames, analyzing...")
+        
+        # Step 3: Find the best frame with a single face
+        if self.lcd:
+            self.lcd.display_message("Analyzing...", "Finding best")
+        
+        best_frame = None
+        best_face_size = 0
+        
+        for frame in captured_frames:
             faces = self.face_detector.detect_faces(frame)
-            display_frame = self.face_detector.draw_faces(frame, faces)
             
-            # Show status
-            if len(faces) == 0:
-                status = "No face detected"
-                color = (0, 0, 255)
-            elif len(faces) == 1:
-                status = "Ready! Press SPACE to capture"
-                color = (0, 255, 0)
-            else:
-                status = "Multiple faces! Only one person"
-                color = (0, 0, 255)
+            if len(faces) == 1:
+                # Calculate face size (larger = better quality)
+                x, y, w, h = faces[0]
+                face_size = w * h
                 
-            cv2.putText(display_frame, status, (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-            cv2.putText(display_frame, f"Enrolling: {student_name}", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            
-            cv2.imshow("Enrollment - Face Capture", display_frame)
-            
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord(' ') and len(faces) == 1:
-                # Capture face
-                face_roi, face_bbox = self.face_detector.get_single_face(frame)
-                
-                if face_roi is not None:
-                    # Quality check removed - proceed directly to embedding generation
-                    print("[Capture] Face captured! Generating embedding...")
-                    
-                    # Generate embedding
-                    face_embedding = self.face_recognizer.generate_embedding(face_roi)
-                    
-                    if face_embedding is not None:
-                        print("[Capture] ✓ Face embedding generated successfully!")
-                        captured = True
-                    else:
-                        print("[Capture] ✗ Failed to generate embedding. Try again.")
-                else:
-                    print("[Capture] ✗ Failed to extract face. Try again.")
-                    
-            elif key == 27:  # ESC
-                print("[Capture] Cancelled by user")
-                return None
-                
-        return face_embedding
+                if face_size > best_face_size:
+                    best_face_size = face_size
+                    best_frame = frame
+        
+        if best_frame is None:
+            print("[Capture] No single face detected in any frame")
+            if self.lcd:
+                self.lcd.display_message("No Face Found", "Try again")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(2)
+            return None
+        
+        print(f"[Capture] Best face found (size: {best_face_size})")
+        
+        # Step 4: Extract face and generate embedding
+        if self.lcd:
+            self.lcd.display_message("Processing...", "Analyzing face")
+        
+        face_roi, face_bbox = self.face_detector.get_single_face(best_frame)
+        
+        if face_roi is None:
+            print("[Capture] Failed to extract face from best frame")
+            if self.lcd:
+                self.lcd.display_message("Error", "Face unclear")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(2)
+            return None
+        
+        # Generate embedding
+        print("[Capture] Generating face embedding...")
+        face_embedding = self.face_recognizer.generate_embedding(face_roi)
+        
+        if face_embedding is not None:
+            print("[Capture] ✓ Face embedding generated successfully!")
+            if self.lcd:
+                self.lcd.display_message("Success!", "Face captured")
+            if self.buzzer:
+                self.buzzer.success_tone()
+            time.sleep(2)
+            return face_embedding
+        else:
+            print("[Capture] ✗ Failed to generate embedding")
+            if self.lcd:
+                self.lcd.display_message("Error", "Try again")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(2)
+            return None
         
     def capture_aruco_id(self, student_name):
         """
-        Capture ArUco marker ID
+        Capture ArUco marker ID using multi-frame capture
         
         Args:
             student_name: Name of student
@@ -137,55 +209,98 @@ class EnrollmentSystem:
             ArUco ID or None
         """
         print(f"\n[Capture] Capturing ArUco marker for: {student_name}")
+        
+        # Step 1: Show initial instruction on LCD
+        if self.lcd:
+            self.lcd.display_message("Show ArUco", "Marker to camera")
         print("[Capture] Show the ArUco marker to the camera...")
-        print("[Capture] Press SPACE to capture, ESC to cancel")
+        print("[Capture] Waiting 5 seconds...")
+        time.sleep(5)  # Give user time to position marker
         
-        captured = False
-        aruco_id = None
+        # Step 2: Capture multiple frames
+        if self.lcd:
+            self.lcd.display_message("Capturing...", "Hold steady!")
+        print("[Capture] Capturing frames...")
         
-        while not captured:
+        frames_to_capture = 15
+        captured_frames = []
+        retry_count = 0
+        max_retries = 60  # Increased
+        
+        while len(captured_frames) < frames_to_capture and retry_count < max_retries:
             frame = self.camera.read_frame()
+            retry_count += 1
             
             if frame is None:
-                print("[Error] Failed to read frame")
-                time.sleep(0.1)
+                print(f"[Capture] Frame {retry_count}: None (retrying...)")
+                time.sleep(0.2)
                 continue
-                
-            # Detect ArUco markers
+            
+            captured_frames.append(frame.copy())
+            print(f"[Capture] Captured frame {len(captured_frames)}/{frames_to_capture}")
+            if self.lcd:
+                self.lcd.display_message("Capturing...", f"Frame {len(captured_frames)}/{frames_to_capture}")
+            time.sleep(0.2)
+        
+        if len(captured_frames) < 5:
+            print(f"[Error] Could not capture enough frames (got {len(captured_frames)}, need at least 5)")
+            print("[Error] Check camera connection or try: rpicam-hello")
+            if self.lcd:
+                self.lcd.display_message("Camera Error", "Check connection")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(3)
+            return None
+        
+        print(f"[Capture] Got {len(captured_frames)} frames, analyzing...")
+        
+        # Step 3: Find best frame with a single ArUco marker
+        if self.lcd:
+            self.lcd.display_message("Analyzing...", "Finding marker")
+        
+        # Count detected marker IDs across all frames
+        marker_counts = {}
+        
+        for frame in captured_frames:
             marker_ids, corners = self.aruco_detector.detect_markers(frame)
-            display_frame = self.aruco_detector.draw_markers(frame, corners, marker_ids)
             
-            # Show status
-            if len(marker_ids) == 0:
-                status = "No ArUco marker detected"
-                color = (0, 0, 255)
-            elif len(marker_ids) == 1:
-                status = f"Marker ID: {marker_ids[0]} - Press SPACE"
-                color = (0, 255, 0)
-            else:
-                status = "Multiple markers! Show only one"
-                color = (0, 0, 255)
-                
-            cv2.putText(display_frame, status, (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-            cv2.putText(display_frame, f"Enrolling: {student_name}", (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            
-            cv2.imshow("Enrollment - ArUco Capture", display_frame)
-            
-            key = cv2.waitKey(1) & 0xFF
-            
-            if key == ord(' ') and len(marker_ids) == 1:
-                # Capture ArUco ID
-                aruco_id = marker_ids[0]
-                print(f"[Capture] ✓ ArUco marker captured: ID {aruco_id}")
-                captured = True
-                
-            elif key == 27:  # ESC
-                print("[Capture] Cancelled by user")
-                return None
-                
-        return aruco_id
+            if len(marker_ids) == 1:
+                marker_id = marker_ids[0]
+                marker_counts[marker_id] = marker_counts.get(marker_id, 0) + 1
+        
+        if not marker_counts:
+            print("[Capture] No ArUco marker detected in any frame")
+            if self.lcd:
+                self.lcd.display_message("No Marker", "Try again")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(2)
+            return None
+        
+        # Get the most frequently detected marker
+        best_marker_id = max(marker_counts, key=marker_counts.get)
+        detection_count = marker_counts[best_marker_id]
+        
+        print(f"[Capture] Marker {best_marker_id} detected {detection_count} times")
+        
+        if detection_count < 3:
+            print("[Capture] Marker not stable enough, try again")
+            if self.lcd:
+                self.lcd.display_message("Marker unclear", "Try again")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(2)
+            return None
+        
+        # Success!
+        print(f"[Capture] ✓ ArUco marker captured: ID {best_marker_id}")
+        if self.lcd:
+            self.lcd.display_message("Success!", f"Marker: {best_marker_id}")
+        if self.buzzer:
+            self.buzzer.success_tone()
+        time.sleep(2)
+        
+        return best_marker_id
         
     def enroll_student(self, name, aruco_id, face_embedding):
         """
@@ -202,13 +317,28 @@ class EnrollmentSystem:
         print(f"\n[Enroll] Enrolling student: {name}")
         print(f"[Enroll] ArUco ID: {aruco_id}")
         
+        if self.lcd:
+            self.lcd.display_message("Saving...", "Please wait")
+        
         student_id = self.db.add_student(name, aruco_id, face_embedding)
         
         if student_id:
             print(f"[Enroll] ✓ Student enrolled successfully! ID: {student_id}")
+            if self.lcd:
+                self.lcd.display_message("Enrolled!", f"{name}")
+            if self.buzzer:
+                self.buzzer.success_tone()
+                time.sleep(0.2)
+                self.buzzer.success_tone()
+            time.sleep(3)
             return student_id
         else:
             print("[Enroll] ✗ Failed to enroll student (ArUco ID may already exist)")
+            if self.lcd:
+                self.lcd.display_message("Error", "ID exists")
+            if self.buzzer:
+                self.buzzer.error_tone()
+            time.sleep(3)
             return None
             
     def run_enrollment(self):
@@ -292,7 +422,10 @@ class EnrollmentSystem:
         """Clean up resources"""
         print("\n[Cleanup] Releasing resources...")
         self.camera.release()
-        cv2.destroyAllWindows()
+        if not self.use_lcd:
+            cv2.destroyAllWindows()
+        if self.lcd:
+            self.lcd.clear()
         print("[Cleanup] Cleanup complete")
 
 
